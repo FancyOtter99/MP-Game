@@ -210,7 +210,7 @@ async def game_loop():
             if bid in bullets:
                 del bullets[bid]
 
-        await asyncio.sleep(1 / 30)
+        await asyncio.sleep(1 / 15)
 
 def reset_game():
     global players, bullets
