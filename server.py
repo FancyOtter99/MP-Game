@@ -255,7 +255,7 @@ async def broadcast_loop():
                 "world_height": WORLD_HEIGHT
             }
             await manager.broadcast(json.dumps(state))
-            await asyncio.sleep(1 / 30)
+            await asyncio.sleep(1 / 15)
         except Exception as e:
             print("Broadcast error:", e)
 
