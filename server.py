@@ -11,17 +11,6 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import subprocess
 
-def get_ip_mac_mapping():
-    """Return a dict of IP -> MAC for devices connected via wlan0 only."""
-    output = subprocess.check_output("arp -n", shell=True).decode()
-    mapping = {}
-    for line in output.splitlines():
-        parts = line.split()
-        if len(parts) >= 5 and ':' in parts[2] and parts[-1] == "wlan0":
-            ip = parts[0]
-            mac = parts[2]
-            mapping[ip] = mac
-    return mapping
 
 
 
@@ -275,6 +264,9 @@ async def get_index():
     print("Serving index.html")
     return FileResponse(Path("static") / "index.html")
 
+banned_ips = set()
+banned_usernames = {}  # username -> IP
+
 @app.websocket("/ws")
 async def websocket_handler(websocket: WebSocket):
     connection_id = await manager.connect(websocket)
@@ -288,17 +280,14 @@ async def websocket_handler(websocket: WebSocket):
         # 1. Capture client IP
         client_ip = websocket.client.host
 
-
-        # 2. Get MAC from IP→MAC mapping on wlan0
-        ip_mac_map = get_ip_mac_mapping()
-        player_mac = ip_mac_map.get(client_ip)
-
-        print(f"Username: {username} Mac: {player_mac} Ip: {client_ip}")
-
+        if client_ip in banned_ips:
+            print(f"Rejected connection from banned IP: {client_ip}")
+            await websocket.close()
+            return
+            
         players[player_id] = {
             "id": player_id,
             "username": username,
-            "mac": player_mac,   # store MAC here
             "color": f"hsl({random.randint(0,360)}, 70%, 60%)",
             "x": random.uniform(PLAYER_SIZE, WORLD_WIDTH - PLAYER_SIZE),
             "y": random.uniform(PLAYER_SIZE, WORLD_HEIGHT - PLAYER_SIZE),
@@ -355,54 +344,38 @@ async def websocket_handler(websocket: WebSocket):
 
 
             elif msg["type"] == "ban":
-                username_to_ban = msg["username"]
-                
-                # Look up MAC
-                player_mac = None
-                for p in players.values():
+                username_to_ban = msg.get("username")
+                ip_to_ban = None
+            
+                # Find the player’s IP
+                for pid, p in players.items():
                     if p["username"] == username_to_ban:
-                        player_mac = p.get("mac")
+                        ip_to_ban = p.get("ip") or websocket.client.host
                         break
-
-                print(f"Ban requested for Username: {username_to_ban}, MAC: {player_mac}")
-
-                if player_mac:
-                    try:
-                        # Ban in FORWARD chain
-                        subprocess.run(
-                            ["sudo", "iptables", "-I", "FORWARD", "-m", "mac", "--mac-source", player_mac, "-j", "DROP"],
-                            check=True
-                        )
-                        # Ban in INPUT chain
-                        subprocess.run(
-                            ["sudo", "iptables", "-I", "INPUT", "-m", "mac", "--mac-source", player_mac, "-j", "DROP"],
-                            check=True
-                        )
-                        print(f"{username_to_ban} with MAC {player_mac} has been banned at the firewall level.")
-                    except subprocess.CalledProcessError as e:
-                        print(f"Failed to ban {username_to_ban}: {e}")
-                else:
-                    print(f"MAC address not found for {username_to_ban}")
+            
+                if ip_to_ban:
+                    banned_ips.add(ip_to_ban)
+                    banned_usernames[username_to_ban] = ip_to_ban
+                    print(f"Banned {username_to_ban} at IP {ip_to_ban}")
+            
+                    # Disconnect currently connected players with that IP
+                    for cid, ws in list(manager.active_connections.items()):
+                        if ws.client.host == ip_to_ban:
+                            await ws.close()
+                            manager.disconnect(cid)
 
 
 
 
             elif msg["type"] == "unban":
-                username_to_unban = msg["username"]
-                player_mac = next((p.get("mac") for p in players.values() if p["username"] == username_to_unban), None)
-                print(f"Unban requested for Username: {username_to_unban}, MAC: {player_mac}")
-                if player_mac:
-                    # Get rule numbers dynamically
-                    input_rules = subprocess.check_output(["sudo", "iptables", "-L", "INPUT", "--line-numbers"], text=True)
-                    forward_rules = subprocess.check_output(["sudo", "iptables", "-L", "FORWARD", "--line-numbers"], text=True)
+                username_to_unban = msg.get("username")
+                ip_to_unban = banned_usernames.get(username_to_unban)
+            
+                if ip_to_unban:
+                    banned_ips.discard(ip_to_unban)
+                    del banned_usernames[username_to_unban]
+                    print(f"Unbanned {username_to_unban} with IP {ip_to_unban}")
 
-                    for chain, rules in [("INPUT", input_rules), ("FORWARD", forward_rules)]:
-                        for line in rules.splitlines():
-                            if player_mac.lower() in line.lower():
-                                rule_num = line.split()[0]
-                                subprocess.run(["sudo", "iptables", "-D", chain, rule_num])
-                                print(f"Removed {chain} rule {rule_num} for {player_mac}")
-                                break  # Remove only the first matching rule
 
 
             elif msg["type"] == "shoot":
