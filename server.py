@@ -449,4 +449,4 @@ app.router.lifespan_context = lifespan
 if __name__ == "__main__":
     import uvicorn
     print("Starting server on http://")
-    uvicorn.run("server:app", host="0.0.0.0", port=0, reload=True)
+    uvicorn.run("server:app", host="0.0.0.0", reload=True)
