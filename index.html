@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Space Drift Battles</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; overflow: hidden; background: #000; color: #eee; font-family: monospace;
+    height: 100%;
+    user-select: none;
+  }
+  canvas {
+    display: block;
+    background: #111;
+    margin: 0 auto;
+  }
+  #scoreboard {
+    position: fixed;
+    top: 10px; right: 10px;
+    background: rgba(0,0,0,0.8);
+    padding: 8px 12px;
+    border-radius: 8px;
+    max-width: 250px;
+    font-size: 14px;
+    color: #ddd;
+    z-index: 10;
+  }
+  #gameOverSign {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 48px;
+    font-weight: bold;
+    color: yellow;
+    text-shadow:
+      0 0 10px #ff0,
+      0 0 20px #ff0,
+      0 0 30px #ffaa00;
+    background: rgba(0,0,0,0.8);
+    padding: 20px 40px;
+    border-radius: 12px;
+    user-select: none;
+    z-index: 200;
+    display: none;
+    animation: flash 1s infinite;
+  }
+
+  #deadSign {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 72px;
+    font-weight: bold;
+    color: red;
+    text-shadow:
+      0 0 10px #f00,
+      0 0 20px #f00,
+      0 0 30px #f00,
+      0 0 40px #ff0000;
+    display: none;
+    user-select: none;
+    animation: flash 1s infinite;
+    z-index: 100;
+  }
+  @keyframes flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  #usernamePrompt {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #222;
+    padding: 20px 30px;
+    border-radius: 12px;
+    box-shadow: 0 0 15px #00f;
+    color: #eee;
+    font-size: 20px;
+    user-select: none;
+    z-index: 200;
+  }
+  #usernameInput {
+    font-size: 18px;
+    padding: 8px;
+    border-radius: 6px;
+    border: none;
+    width: 200px;
+  }
+  #startBtn {
+    margin-left: 12px;
+    padding: 8px 16px;
+    font-size: 18px;
+    cursor: pointer;
+    border-radius: 6px;
+    border: none;
+    background: #0055ff;
+    color: #fff;
+  }
+  #startBtn:hover {
+    background: #0080ff;
+  }
+  #speedometer {
+    position: fixed;
+    bottom: 15px;
+    left: 15px;
+    font-size: 16px;
+    background: rgba(0,0,0,0.7);
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: #eee;
+    font-family: monospace;
+    z-index: 10;
+  }
+  #chatPanel {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  width: 250px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 14px;
+  color: #eee;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+}
+#chatMessages {
+  flex: 1;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 5px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+#chatMessages div {
+  margin-bottom: 4px;
+  word-wrap: break-word;
+}
+#chatInput {
+  border: none;
+  padding: 6px;
+  font-size: 14px;
+  background: rgba(255,255,255,0.1);
+  color: #eee;
+  outline: none;
+}
+#chatInput:focus {
+  background: rgba(255,255,255,0.2);
+}
+
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="scoreboard"></div>
+<div id="deadSign">DEAD</div>
+<div id="gameOverSign"></div>
+
+<div id="speedometer">Speed: 0.00</div>
+
+<div id="usernamePrompt">
+  Enter username:
+  <input type="text" id="usernameInput" maxlength="15" autofocus />
+  <button id="startBtn">Start</button>
+</div>
+
+<div id="chatPanel">
+  <div id="chatMessages"></div>
+  <input id="chatInput" type="text" placeholder="Type message..." maxlength="200" />
+</div>
+
+
+
+<div class="multi-shot-circle">
+  <div class="dot dot1"></div>
+  <div class="dot dot2"></div>
+  <div class="dot dot3"></div>
+  <div class="dot dot4"></div>
+</div>
+
+<style>
+.multi-shot-circle {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  width: 60px;    /* smaller */
+  height: 60px;   /* smaller */
+  background-color: teal;
+  border-radius: 50%;
+  z-index: 9999;
+}
+
+.dot {
+  position: absolute;
+  width: 8px;    /* smaller dots */
+  height: 8px;
+  background-color: #fff;  /* white bullets */
+  border-radius: 50%;
+}
+
+/* Position the dots around the circle */
+.dot1 { top: 6px; left: 50%; transform: translateX(-50%); }
+.dot2 { top: 50%; right: 6px; transform: translateY(-50%); }
+.dot3 { bottom: 6px; left: 50%; transform: translateX(-50%); }
+.dot4 { top: 50%; left: 6px; transform: translateY(-50%); }
+</style>
+
+
+<div class="rapid-fire-container">
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+  <div class="dot"></div>
+</div>
+
+<style>
+  .rapid-fire-container {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    width: 60px;
+    height: 60px;
+    background-color: yellow;
+    border-radius: 50%;
+    display: none; /* make sure it's visible */
+    z-index: 9999;
+  }
+
+  .rapid-fire-container .dot {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 10px;
+    height: 10px;
+    background-color: #fff;
+    border-radius: 50%;
+  }
+
+  .rapid-fire-container .dot:nth-child(1) { top: 8%; }
+  .rapid-fire-container .dot:nth-child(2) { top: 32%; }
+  .rapid-fire-container .dot:nth-child(3) { top: 60%; }
+  .rapid-fire-container .dot:nth-child(4) { top: 85%; }
+</style>
+
+<div class="speed-circle"></div>
+
+<style>
+.speed-circle {
+  display: none;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(45deg, #00ff00, #007700);
+  border-radius: 50%;
+  box-shadow:
+    0 0 10px #00ff00,
+    0 0 20px #00cc00,
+    0 0 30px #007700;
+  z-index: 10000;
+  animation: pulseSpeed 1.5s infinite alternate ease-in-out;
+}
+
+/* Pulsating glow to give speed vibe */
+@keyframes pulseSpeed {
+  0% {
+    box-shadow:
+      0 0 10px #00ff00,
+      0 0 20px #00cc00,
+      0 0 30px #007700;
+    transform: scale(1);
+  }
+  100% {
+    box-shadow:
+      0 0 20px #00ff00,
+      0 0 40px #00cc00,
+      0 0 60px #007700;
+    transform: scale(1.1);
+  }
+}
+</style>
+
+
+
+
+
+<script>
+    (() => {
+  let overlay = null;
+  let isShown = false;
+
+  console.log("edit manualVel to change speed")
+  console.log("edit manualTvel to change turn speed")
+  console.log("ban(\"username\")")
+  console.log("unban(\"username\")")
+  async function fetchAndInject(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to fetch ${url}`);
+
+    const htmlText = await res.text();
+
+    // Create a container div for the overlay
+    overlay = document.createElement('div');
+    overlay.style = `
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: white;
+      z-index: 9999;
+      overflow: auto;
+    `;
+
+    // Parse the fetched HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlText, 'text/html');
+
+    // Inject CSS <link> and <style> into overlay
+    // We clone all <link rel=stylesheet> and <style> from fetched page
+    const head = document.createElement('head');
+    [...doc.querySelectorAll('link[rel="stylesheet"], style')].forEach(node => {
+      head.appendChild(node.cloneNode(true));
+    });
+
+    // Inject JS scripts - but to avoid double loading or errors,
+    // let's just clone inline scripts (with code) and ignore external scripts,
+    // or we can load external scripts by creating script tags manually.
+
+    const bodyContent = doc.body.cloneNode(true);
+
+    // Remove old script tags from bodyContent to avoid running twice
+    bodyContent.querySelectorAll('script').forEach(s => s.remove());
+
+    // Build the overlay document fragment
+    const frag = document.createDocumentFragment();
+    frag.appendChild(head);
+    frag.appendChild(bodyContent);
+
+    overlay.appendChild(frag);
+    document.body.appendChild(overlay);
+
+    // Now add scripts dynamically, inline first
+    doc.querySelectorAll('script').forEach(script => {
+      if (script.src) {
+        // external script
+        const s = document.createElement('script');
+        s.src = script.src;
+        overlay.appendChild(s);
+      } else {
+        // inline script
+        const s = document.createElement('script');
+        s.textContent = script.textContent;
+        overlay.appendChild(s);
+      }
+    });
+  }
+
+  async function toggleOverlay() {
+    if (!isShown) {
+      try {
+        await fetchAndInject('https://thors-hammeris.github.io/calculator/calculator.html');
+        isShown = true;
+        document.title = "Calculator";
+        let win = window.open(
+          "https://classroom.google.com", // URL
+          "popupWindow",         // window name (not _blank)
+          "width=" + screen.availWidth +
+          ",height=" + screen.availHeight +
+          ",top=0,left=0,toolbar=no,menubar=no,scrollbars=no,resizable=no,status=no"
+        );
+        if (win) {
+          win.onload = () => win.document.documentElement.requestFullscreen();
+        } else {
+          alert("Popup blocked! Click something first.");
+        }
+      } catch (e) {
+        console.error('Failed to load calculator overlay:', e);
+      }
+    } else {
+      if (overlay) {
+        document.title = "Space Drift Battle";
+        overlay.remove();
+        overlay = null;
+      }
+      isShown = false;
+    }
+  }
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      toggleOverlay();
+
+
+    }
+  });
+})();
+
+</script>
+
+
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const scoreboard = document.getElementById("scoreboard");
+const deadSign = document.getElementById("deadSign");
+const speedometer = document.getElementById("speedometer");
+const usernamePrompt = document.getElementById("usernamePrompt");
+const usernameInput = document.getElementById("usernameInput");
+const startBtn = document.getElementById("startBtn");
+const multishotLogo = document.querySelector(".multi-shot-circle");
+const rapidfireLogo = document.querySelector(".rapid-fire-container");
+const speedLogo = document.querySelector(".speed-circle");
+let loaded = false
+
+window.addEventListener('DOMContentLoaded', () => {
+  loaded = true
+});
+
+let PLAYER_SIZE = 15;
+let WORLD_WIDTH = 3000;
+let WORLD_HEIGHT = 2000;
+
+let ws;
+let playerId = null;
+let players = {};
+let bullets = {};
+let asteroids = {};
+let alive = true;
+let username = "";
+powerup = false
+let keys = {
+  left: false,
+  right: false,
+  up: false,
+  shoot: false
+};
+
+const powerUps = ["rapid_fire", "multishot", "speed"];
+const powerUpBoxes = [];
+const POWERUP_SIZE = 20;
+
+
+const chatMessages = document.getElementById("chatMessages");
+const chatInput = document.getElementById("chatInput");
+
+function addChatMessage(user, text) {
+  const div = document.createElement("div");
+  div.innerHTML = `<b>${user}:</b> ${text}`;
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+chatInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && chatInput.value.trim()) {
+    ws.send(JSON.stringify({
+      type: "chat",
+      user: username,
+      text: chatInput.value.trim()
+    }));
+    chatInput.value = "";
+  }
+});
+
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+function drawShip(x, y, angle, color, alive) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = alive ? color : "#444";
+  ctx.beginPath();
+  // wider spaceship shape
+  ctx.moveTo(PLAYER_SIZE * 2.2, 0);
+  ctx.lineTo(-PLAYER_SIZE * 1.2, PLAYER_SIZE * 0.8);
+  ctx.lineTo(-PLAYER_SIZE * 0.5, 0);
+  ctx.lineTo(-PLAYER_SIZE * 1.2, -PLAYER_SIZE * 0.8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawBullet(b, offsetX, offsetY) {
+  ctx.beginPath();
+  ctx.fillStyle = "#fff";
+  ctx.arc(b.x - offsetX, b.y - offsetY, 4, 0, 2 * Math.PI);
+  ctx.fill();
+}
+
+function drawAsteroid(ast, offsetX, offsetY) {
+  ctx.beginPath();
+  ctx.fillStyle = "#888";
+  ctx.shadowColor = "#bbb";
+  ctx.shadowBlur = 5;
+  ctx.arc(ast.x - offsetX, ast.y - offsetY, ast.size, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#555";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function updateScoreboard() {
+  const sortedPlayers = Object.values(players).sort((a,b) => b.score - a.score);
+  let html = "<b>Leaderboard</b><br>";
+  for (let p of sortedPlayers) {
+    html += `${p.username || p.color}: ${p.score}<br>`;
+  }
+  scoreboard.innerHTML = html;
+}
+
+function sendMove() {
+  if (!playerId || !alive) return;
+  const p = players[playerId];
+  if (!p) return;
+
+  ws.send(JSON.stringify({
+    type: "move",
+    x: p.x,
+    y: p.y,
+    angle: p.angle,
+    vx: p.vx,
+    vy: p.vy,
+    moving_forward: keys.up,
+    turning_left: keys.left,
+    turning_right: keys.right
+  }));
+}
+
+function shoot() {
+  if (!playerId || !alive) return;
+
+  const shots = multishot ? 4 : 1;
+  const delayBetweenShots = 75; // milliseconds between shots
+
+  for (let i = 0; i < shots; i++) {
+    setTimeout(() => {
+      ws.send(JSON.stringify({ type: "shoot" }));
+    }, i * delayBetweenShots);
+  }
+}
+
+
+// Expose ban function to console
+window.ban = function(targetUsername) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.warn("WebSocket not connected yet!");
+    return;
+  }
+  
+  ws.send(JSON.stringify({
+    type: "ban",
+    username: targetUsername
+  }));
+
+  console.log(`Ban message sent for user: ${targetUsername}`);
+};
+
+
+
+
+// Expose unban function to console
+window.unban = function(targetUsername) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    console.warn("WebSocket not connected yet!");
+    return;
+  }
+
+  ws.send(JSON.stringify({
+    type: "unban",
+    username: targetUsername
+  }));
+
+  console.log(`Unban message sent for user: ${targetUsername}`);
+};
+
+
+
+const MAX_POWERUPS = 5;
+
+function spawnPowerUp() {
+  if (powerUpBoxes.length >= MAX_POWERUPS) {
+    return;  // Bail if too many power-ups already exist
+  }
+  const type = powerUps[Math.floor(Math.random() * powerUps.length)];
+  const x = Math.random() * (WORLD_WIDTH - POWERUP_SIZE * 2) + POWERUP_SIZE;
+  const y = Math.random() * (WORLD_HEIGHT - POWERUP_SIZE * 2) + POWERUP_SIZE;
+  powerUpBoxes.push({ type, x, y, size: POWERUP_SIZE });
+}
+
+// Spawn a power-up every 10 seconds
+setInterval(spawnPowerUp, 10000);
+
+
+
+
+function drawPowerUp(box, offsetX, offsetY) {
+  ctx.fillStyle = {
+    "rapid_fire": "#ff0",
+    "multishot": "#0ff",
+    "speed": "#0f0"
+  }[box.type] || "#fff";
+
+  ctx.beginPath();
+  ctx.rect(box.x - offsetX - box.size/2, box.y - offsetY - box.size/2, box.size, box.size);
+  ctx.fill();
+
+  // Optional: add label or icon
+  ctx.fillStyle = "#000";
+  ctx.font = "bold 12px monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(box.type[0].toUpperCase(), box.x - offsetX, box.y - offsetY + 4);
+}
+
+function checkPowerUpCollision(player) {
+  for (let i = 0; i < powerUpBoxes.length; i++) {
+    const box = powerUpBoxes[i];
+    const dx = player.x - box.x;
+    const dy = player.y - box.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < PLAYER_SIZE + box.size / 2) {
+      if (!powerup) {
+        activatePowerUp(player, box.type);
+      }
+      powerUpBoxes.splice(i, 1);
+      break;
+    }
+  }
+}
+
+rapidFire = false
+
+speed1 = false
+
+multishot = false
+
+function activatePowerUp(player, type) {
+  if (type === "rapid_fire") {
+    rapidFire = true;
+    powerup = true;
+    setTimeout(() => { rapidFire = false; powerup = false; }, 15000);
+  }
+  else if (type === "multishot") {
+    multishot = true;
+    powerup = true;
+    setTimeout(() => { multishot = false; powerup = false; }, 15000);
+  }
+  else if (type === "speed") {
+    speed1 = true;
+    powerup = true;
+    setTimeout(() => { speed1 = false; powerup = false; }, 15000);
+  }
+  // Add other power-up effects here
+}
+
+
+let vel = 0
+let manualVel = 0
+let tvel = 0.14
+let manualTvel = 0
+
+let lastTeleport = Date.now(); // time of last teleport in ms
+let teleportCooldown = 10000; // 10 seconds
+
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!playerId || !players[playerId]) {
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  let p = players[playerId];
+  // -- LOCAL MOVEMENT PREDICTION -- 
+  if (alive && p.alive) {
+    if (manualTvel !== 0) {
+        tvel = manualTvel
+    }
+    if (keys.left) p.angle -= tvel;
+    if (keys.right) p.angle += tvel;
+    if (keys.up) {
+      if (manualVel !== 0) {
+        vel = manualVel;
+      } else {
+        vel = speed1 ? 1.2 : rapidFire ? 0.25 : 0.65;
+      }
+      p.vx += Math.cos(p.angle) * vel;
+      p.vy += Math.sin(p.angle) * vel;
+    }
+    // friction
+    p.vx *= 0.97;
+    p.vy *= 0.97;
+
+    p.x += p.vx;
+    p.y += p.vy;
+
+    // Clamp to world borders
+    p.x = Math.min(Math.max(PLAYER_SIZE, p.x), WORLD_WIDTH - PLAYER_SIZE);
+    p.y = Math.min(Math.max(PLAYER_SIZE, p.y), WORLD_HEIGHT - PLAYER_SIZE);
+  }
+
+
+
+
+  // Viewport offset to center player
+  let offsetX = p.x - canvas.width / 2;
+  let offsetY = p.y - canvas.height / 2;
+
+  offsetX = Math.min(Math.max(0, offsetX), WORLD_WIDTH - canvas.width);
+  offsetY = Math.min(Math.max(0, offsetY), WORLD_HEIGHT - canvas.height);
+
+  // Background and border
+  ctx.fillStyle = "#000022";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.strokeStyle = "#3399ff";
+  ctx.lineWidth = 5;
+  ctx.strokeRect(-offsetX, -offsetY, WORLD_WIDTH, WORLD_HEIGHT);
+
+  // Draw asteroids
+  for (let id in asteroids) {
+    drawAsteroid(asteroids[id], offsetX, offsetY);
+  }
+
+  // Draw bullets
+  for (let id in bullets) {
+    drawBullet(bullets[id], offsetX, offsetY);
+  }
+
+  // Draw power-up boxes
+  for (let i = 0; i < powerUpBoxes.length; i++) {
+    drawPowerUp(powerUpBoxes[i], offsetX, offsetY);
+  }
+
+  // Check collision with current player
+  checkPowerUpCollision(players[playerId]); 
+ 
+
+ 
+  if (loaded) {
+    if (multishot) {
+      multishotLogo.style.display = 'block'
+    }
+    else if (rapidFire) {
+      rapidfireLogo.style.display = 'block'
+    }
+    else if (speed1) {
+      speedLogo.style.display = 'block'
+    }
+    else {
+      speedLogo.style.display = 'none'
+      multishotLogo.style.display = 'none'
+      rapidfireLogo.style.display = 'none'
+    }
+  }
+
+  // Draw players
+  for (let id in players) {
+    const pl = players[id];
+    if (!pl.alive) continue;
+    drawShip(pl.x - offsetX, pl.y - offsetY, pl.angle, pl.color, pl.alive);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 14px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(pl.username || pl.color, pl.x - offsetX, pl.y - offsetY - PLAYER_SIZE - 12);
+  }
+
+  alive = p.alive;
+  if (!alive) {
+    deadSign.style.display = "block";
+  } else {
+    deadSign.style.display = "none";
+  }
+
+
+  // Bounce off asteroids
+  for (let id in asteroids) {
+    let ast = asteroids[id];
+    let dx = p.x - ast.x;
+    let dy = p.y - ast.y;
+    let dist = Math.sqrt(dx*dx + dy*dy);
+    let minDist = PLAYER_SIZE + ast.size;
+
+    if (dist < minDist && dist > 0) {
+      // Overlap amount
+      let overlap = minDist - dist;
+
+      // Normalize collision vector
+      let nx = dx / dist;
+      let ny = dy / dist;
+
+      // Push player out of asteroid
+      p.x += nx * overlap;
+      p.y += ny * overlap;
+
+      // Reflect velocity (simple bounce)
+      let dot = p.vx * nx + p.vy * ny;
+      p.vx = p.vx - 2 * dot * nx;
+      p.vy = p.vy - 2 * dot * ny;
+
+      // Optional: reduce velocity to simulate friction on bounce
+      p.vx *= 0.7;
+      p.vy *= 0.7;
+    }
+  }
+
+
+  // Speedometer
+  const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+  speedometer.textContent = "Speed: " + speed.toFixed(2);
+
+  updateScoreboard();
+
+  sendMove();
+
+  requestAnimationFrame(gameLoop);
+}
+
+function connect(username) {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({username}));
+  };
+
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "init") {
+      playerId = msg.id;
+      players = msg.players;
+      bullets = msg.bullets;
+      asteroids = msg.asteroids;
+      PLAYER_SIZE = msg.player_size || PLAYER_SIZE;
+      WORLD_WIDTH = msg.world_width || WORLD_WIDTH;
+      WORLD_HEIGHT = msg.world_height || WORLD_HEIGHT;
+      usernamePrompt.style.display = "none";
+      gameLoop();
+    }else if (msg.type === "game_over") {
+      const gameOverSign = document.getElementById("gameOverSign");
+      gameOverSign.textContent = `${msg.winner} wins!`;
+      gameOverSign.style.display = "block";
+      
+      // Hide after 2 seconds
+      setTimeout(() => {
+        gameOverSign.style.display = "none";
+        // Optional: you can also reset game state or reload here
+        // location.reload(); // if you want a reload
+      }, 2000);
+    }
+
+      else if (msg.type === "chat") {
+        addChatMessage(msg.user, msg.text);
+      }
+
+
+      else if (msg.type === "update") {
+      players = msg.players;
+      bullets = msg.bullets;
+      asteroids = msg.asteroids;
+    } else if (msg.type === "new_player") {
+      players[msg.player.id] = msg.player;
+    } else if (msg.type === "player_left") {
+      delete players[msg.id];
+    }
+  };
+
+  ws.onclose = () => {
+    alert("Connection lost! Refresh to reconnect.");
+  };
+}
+
+// Controls
+window.addEventListener("keydown", e => {
+  if (e.repeat) return;
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
+  if (e.key === "ArrowUp" || e.key === "w") keys.up = true;
+  if (e.key === " ") keys.shoot = true;
+});
+window.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
+  if (e.key === "ArrowUp" || e.key === "w") keys.up = false;
+  if (e.key === " ") keys.shoot = false;
+});
+let lastShoot = 0;
+
+function shootLoop() {
+  if (keys.shoot && alive) {
+    const now = Date.now();
+    const rapidFireActive = rapidFire
+    const delay = rapidFireActive ? 100 : multishot ? 800 : 500;
+    if (now - lastShoot > delay) {
+      shoot();
+      lastShoot = now;
+    }
+    setTimeout(shootLoop, delay / 2);
+  } else {
+    setTimeout(shootLoop, 10);
+  }
+}
+
+
+// Start the shooting loop after player joins
+shootLoop();
+
+
+// Start button
+startBtn.onclick = () => {
+  const name = usernameInput.value.trim();
+  if (name.length === 0) return alert("Please enter a username.");
+  username = name;
+  connect(username);
+};
+</script>
+</body>
+</html>
