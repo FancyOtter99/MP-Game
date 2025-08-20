@@ -288,6 +288,7 @@ async def websocket_handler(websocket: WebSocket):
         players[player_id] = {
             "id": player_id,
             "username": username,
+            "ip": client_ip,   # <--- store IP here
             "color": f"hsl({random.randint(0,360)}, 70%, 60%)",
             "x": random.uniform(PLAYER_SIZE, WORLD_WIDTH - PLAYER_SIZE),
             "y": random.uniform(PLAYER_SIZE, WORLD_HEIGHT - PLAYER_SIZE),
@@ -347,10 +348,10 @@ async def websocket_handler(websocket: WebSocket):
                 username_to_ban = msg.get("username")
                 ip_to_ban = None
             
-                # Find the player’s IP
-                for pid, p in players.items():
+                # Look up the player's IP
+                for p in players.values():
                     if p["username"] == username_to_ban:
-                        ip_to_ban = p.get("ip") or websocket.client.host
+                        ip_to_ban = p["ip"]
                         break
             
                 if ip_to_ban:
@@ -358,11 +359,12 @@ async def websocket_handler(websocket: WebSocket):
                     banned_usernames[username_to_ban] = ip_to_ban
                     print(f"Banned {username_to_ban} at IP {ip_to_ban}")
             
-                    # Disconnect currently connected players with that IP
+                    # Disconnect anyone currently connected from that IP
                     for cid, ws in list(manager.active_connections.items()):
-                        if ws.client.host == ip_to_ban:
+                        if getattr(ws.client, "host", None) == ip_to_ban:
                             await ws.close()
                             manager.disconnect(cid)
+
 
 
 
@@ -375,6 +377,7 @@ async def websocket_handler(websocket: WebSocket):
                     banned_ips.discard(ip_to_unban)
                     del banned_usernames[username_to_unban]
                     print(f"Unbanned {username_to_unban} with IP {ip_to_unban}")
+
 
 
 
