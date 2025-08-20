@@ -829,7 +829,8 @@ function gameLoop() {
 }
 
 function connect(username) {
-  ws = new WebSocket(`wss://${location.host}/ws`);
+ const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+ ws = new WebSocket(protocol + location.host + "/ws");
 
   ws.onopen = () => {
     ws.send(JSON.stringify({username}));
